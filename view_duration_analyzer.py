@@ -5,7 +5,53 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 view_duration_df = pd.read_csv('view_durations.csv')
-
+words_per_image_dict = {
+    106:12,
+    107:6,
+    108:27,
+    109:7,
+    110:12,
+    111:5,
+    112:9,  
+    113:22,
+    114:3,
+    115:7,
+    116:17,
+    117:6,
+    118:23,
+    119:16,
+    120:26,
+    121:11,
+    122:7,
+    123:4,
+    124:14,
+    125:17,
+    127:5,
+    128:19,
+    129:10,
+    130:25,
+    131:16,
+    132:12,
+    133:10,
+    134:24,
+    135:3,
+    136:25,
+    137:4,
+    138:23,
+    139:14,
+    140:22,
+    141:45,
+    142:14,
+    143:21,
+    144:64,
+    147:73,
+    148:19,
+    149:36,
+    150:34,
+    151:52,
+    152:50,
+    153:47
+    }
 #Test: should be between 5-15
 print("lowest Duration: ",view_duration_df["system_time_diff_seconds"].min())
 # --> !!
@@ -18,20 +64,42 @@ print("Median Duration: ",view_duration_df["system_time_diff_seconds"].median())
 #image_tag_dictionary should contain a list of tags for every image
 #group view_durations_df by image id and dissect image_nam
 
-def create_image_tag_dict(data):
-    image_tag_dict = {}
-    for file in data['image_name']:
-        tags = file.split('_')[1:-1]  # Exclude 'id' and '.jpg'
-        if "ncc" in tags:
-            tags.remove("ncc")
-        
-        image_id = int(file.split('_')[0][2:])  # Extract image_id from 'id<image_id>'
-        if len(tags)<1:
-            #error in image namng - bandaid solution
-            image_tag_dict[image_id] = ["text"]
-        else:
-            image_tag_dict[image_id] = tags
-    print("image_tag_dict", image_tag_dict)
+def create_textimg_df(data):
+    #create a dataframe with all images that appear in words_per_image_dict, their number of words, their median system time diff as "duration" and their tagstring as "category"
+    textimg_data = []
+    for image_id, group in data.groupby('image_id'):
+        if image_id in words_per_image_dict:
+            word_count = words_per_image_dict[image_id]
+            median_duration = group['system_time_diff_seconds'].median()
+            #get the tagstring from any of the image names in the group
+            tagstring = group.iloc[0]['image_name'].split('_')[1:-1]
+            tagstring = '_'.join(tagstring)
+            textimg_data.append({
+                'image_id': image_id,
+                'words': word_count,
+                'duration': median_duration,
+                'category': tagstring
+            })
+
+    return pd.DataFrame(textimg_data)
+
+def create_image_tag_dict(data,new_labels=False):
+    if new_labels:
+        return adjust_categories(data).set_index('image_id')['tag_combination'].to_dict()
+    else:
+        image_tag_dict = {}
+        for file in data['image_name']:
+            tags = file.split('_')[1:-1]  # Exclude 'id' and '.jpg'
+            if "ncc" in tags:
+                tags.remove("ncc")
+            
+            image_id = int(file.split('_')[0][2:])  # Extract image_id from 'id<image_id>'
+            if len(tags)<1:
+                #error in image namng - bandaid solution
+                image_tag_dict[image_id] = ["text"]
+            else:
+                image_tag_dict[image_id] = tags
+        print("image_tag_dict", image_tag_dict)
     return image_tag_dict
 
 #--Group by image_name
@@ -77,17 +145,27 @@ print("Minimum Median System Time Diff (seconds):", min_image['system_time_diff_
 print("Image ID with Maximum Median System Time Diff (seconds):", max_image['image_id'])
 print("Maximum Median System Time Diff (seconds):", max_image['system_time_diff_seconds']['median'])
 
-def analyze_tag_groups(data, only_text=False):
+def analyze_tag_groups(data, only_text=False, new_labels=False):
     # Create a dictionary to group images by their tag combinations
     tag_group_dict = {}
     
     # Group images by their tag combinations
-    for image_id, tags in create_image_tag_dict(data).items():
+    for image_id, tags in create_image_tag_dict(data, new_labels).items():
         tag_combination = tuple(sorted(tags))  # Use sorted tuple for consistent grouping
         if tag_combination not in tag_group_dict:
             tag_group_dict[tag_combination] = []
-        if (only_text and 'text' in tag_combination or 'textimg' in tag_combination) or not only_text:
+        
+        if not only_text:
             tag_group_dict[tag_combination].append(image_id)
+        else:
+            try:
+                # triggers if image id is in words per image dict, therefore has text
+                tags = words_per_image_dict[image_id]
+                tag_group_dict[tag_combination].append(image_id)
+            except KeyError:
+                continue
+        #if (only_text and words_per_image_dict[image_id] is not None) or not only_text:
+            
         
     
     # Analyze each tag group
@@ -121,8 +199,8 @@ def analyze_tag_groups(data, only_text=False):
     return tag_analysis_df
 
 # Usage and display
-def display_tag_group_analysis(data,only_text=False):
-    tag_analysis = analyze_tag_groups(data,only_text)
+def display_tag_group_analysis(data,only_text=False,new_labels=False):
+    tag_analysis = analyze_tag_groups(data,only_text,new_labels)
     
     print("\n" + "="*80)
     print("TAG GROUP ANALYSIS")
@@ -147,12 +225,21 @@ def display_tag_group_analysis(data,only_text=False):
 
 
 # Plot tag groups by mean viewing time
-def plot_tag_groups(data,only_text = False):
-    tag_analysis = analyze_tag_groups(data,only_text)
-    #bandaid solution for dropping falsely labeled data
-    print("Analysis time:",tag_analysis)
-    tag_analysis = tag_analysis.drop([1,2])
-    #frag nicht mich wieso die Indizes so sind
+def plot_tag_groups(data,only_text = False,new_labels=False):
+    tag_analysis = analyze_tag_groups(data,only_text,new_labels)
+    
+    if new_labels == False:
+        #bandaid solution for dropping falsely labeled data
+    
+        #tag_analysis = tag_analysis.drop([1,2])
+    
+        #frag nicht mich wieso die Indizes so sind
+        pass
+    #drop rows where the tag_string is one of the following: textimg, meme_textigm [sic]
+    print("TAG ANALYSIS ",tag_analysis)
+    
+    tag_analysis = tag_analysis[~tag_analysis['tag_string'].isin(['textimg', 'meme_textigm'])]
+
     plt.figure(figsize=(12, 8))
     plt.barh(range(len(tag_analysis)), tag_analysis['median_system_time'])
     plt.yticks(range(len(tag_analysis)), tag_analysis['tag_string'])
@@ -160,6 +247,7 @@ def plot_tag_groups(data,only_text = False):
     plt.title('Median Viewing Time by Tag Group')
     plt.tight_layout()
     plt.show()
+
 def analyze_temporal_pattern():
     # for every participant, sort their viewing data by time 
     # every file name is formatted like this: Proband<probandID>_hour_minute_seconds_id<imgID>_tag1_tag2..._.csv
@@ -181,11 +269,14 @@ def analyze_temporal_pattern():
 
 #analyze_temporal_pattern()
 
-def create_view_time_matrix(data):
+def create_view_time_matrix(data,only_text=False,new_labels=False):
     # Create a matrix with semantic categories on the one axis and text/no-text on the other axis
     # images with text are marked with the tag textimg, images with text only are marked with the tag text
-    semantic_categories = ["meme", "person", "politik", "ort"]
-    tag_analysis_df = analyze_tag_groups(data)
+    if new_labels:
+        semantic_categories = ["meme", "person", "politik", "ort","meme_politik","person_politik","meme_person_politik"]
+    else:
+        semantic_categories = ["meme", "person", "politik", "ort","person_politik"]
+    tag_analysis_df = analyze_tag_groups(data,only_text,new_labels)
 
     # Create the view time matrix
     view_time_matrix = pd.DataFrame(0, index=semantic_categories, columns=["text", "no_text"], dtype=int)
@@ -193,31 +284,36 @@ def create_view_time_matrix(data):
     # for every tag combination in tag_analysis_df["tag_combination"]
 
     for idx, row in tag_analysis_df.iterrows():
+        if 'text' == row['tag_string']:
+            view_time_matrix.at["Nur Text", "text"] = row['median_system_time']
+            continue
         for category in semantic_categories:
-            if category in row['tag_string']:
-                if 'textimg' in row['tag_string']:
+            #if category in row['tag_string']
+            if row['tag_string'] in [category, category+"_text", category+"_textimg"]:
+                # note that textigm is a misspelled version of textimg
+                if 'text' in row['tag_string'] and not 'textigm' in row['tag_string']:
                     view_time_matrix.at[category, "text"] = row['median_system_time']
                 elif 'textigm' in row['tag_string']:
                     #misspelled file name
                     pass
                 else:
-                   view_time_matrix.at[category, "no_text"] = row['median_system_time']
-        if 'text' == row['tag_string']:
-            view_time_matrix.at["Nur Text", "text"] = row['median_system_time']
+                    view_time_matrix.at[category, "no_text"] = row['median_system_time']
+        
 
     return view_time_matrix
 
-def visualize_view_time_matrix(data):
-    view_time_matrix = create_view_time_matrix(data)
+def visualize_view_time_matrix(data,new_labels=False):
+    view_time_matrix = create_view_time_matrix(data,new_labels=new_labels)
     plt.figure(figsize=(10, 6))
-    sns.heatmap(view_time_matrix, annot=True, cmap="YlGnBu", cbar_kws={'label': 'Mean Viewing Time (seconds)'})
+    mask = view_time_matrix == 0
+    sns.heatmap(view_time_matrix, mask = mask ,annot=True, cmap="YlGnBu", cbar_kws={'label': 'Median Viewing Time (seconds)'})
     plt.title("Viewing Time Matrix")
     plt.xlabel("Text Presence")
     plt.ylabel("Semantic Categories")
     plt.show()
-def create_category_matrix(data):
+def create_category_matrix(data,only_text=False,new_labels=False):
     semantic_categories = ["meme", "person", "politik", "ort"]
-    tag_analysis_df = analyze_tag_groups(data)
+    tag_analysis_df = analyze_tag_groups(data,only_text,new_labels)
     #NxN matrix with each semantic category on both axes. 
     # Each cell shows the average system time diff for the combined category n,m without text
     category_matrix = pd.DataFrame(0, index=semantic_categories, columns=semantic_categories, dtype=float)
@@ -227,12 +323,17 @@ def create_category_matrix(data):
         for category in semantic_categories:
             for other_category in semantic_categories:
                 cell = category_matrix.at[category, other_category]
-                if other_category in row['tag_string'] and category in row['tag_string']:
+                #if other_category in row['tag_string'] and category in row['tag_string']:
+                if(len(row['tag_combination'])>=3):
+                    print("ALARM")
+                if (category in row['tag_string'] and other_category in row['tag_string']) and (len(row['tag_combination'])<3 or "text" in row['tag_string'] and len(row['tag_combination'])<4):
+                    
                     print(category, other_category)
                     if "text" not in row['tag_string']:
                         cell = (cell[0],row['median_system_time'])
                     else:
                         cell = (row['median_system_time'],cell[1])
+
                 category_matrix.at[category, other_category]= cell
     print(category_matrix)
     return category_matrix
@@ -245,61 +346,32 @@ def plot_category_matrix(data):
     plt.xlabel("Semantic Categories")
     plt.ylabel("Semantic Categories")
     plt.show()
+def adjust_categories(data):
+
+    modified_labels_dict = {0: ['meme'], 1: ['meme'], 2: ['meme'], 3: ['meme'], 4: ['meme'], 5: ['meme'], 6: ['meme'], 7: ['meme'], 8: ['meme'], 9: ['meme'], 10: ['meme'], 11: ['ort', 'text'], 12: ['ort', 'text'], 13: ['ort', 'text'], 14: ['ort'], 15: ['ort', 'text'], 16: ['ort', 'text'], 17: ['ort', 'text'], 18: ['ort'], 19: ['ort'], 20: ['ort'], 21: ['ort'], 22: ['ort'], 23: ['ort'], 24: ['ort'], 25: ['ort'], 26: ['ort'], 27: ['ort'], 28: ['ort'], 29: ['ort'], 30: ['ort'], 31: ['ort'], 32: ['ort'], 33: ['person', 'text'], 34: ['person', 'text'], 35: ['person'], 36: ['person'], 37: ['person'], 38: ['person'], 39: ['person'], 40: ['person'], 41: ['person'], 42: ['person'], 43: ['person'], 44: ['person'], 45: ['person'], 46: ['person'], 47: ['person'], 48: ['person'], 49: ['person'], 50: ['person'], 51: ['person'], 52: ['person'], 53: ['person'], 54: ['person'], 55: ['person'], 56: ['person'], 57: ['person'], 58: ['person'], 59: ['person'], 60: ['person'], 61: ['person'], 62: ['person'], 63: ['person'], 64: ['person'], 65: ['person'], 66: ['person'], 67: ['person'], 68: ['person'], 69: ['person'], 70: ['person'], 71: ['person'], 72: ['person'], 73: ['person'], 74: ['person', 'text'], 75: ['person'], 76: ['person', 'text'], 77: ['person'], 78: ['person'], 79: ['person'], 80: ['person'], 81: ['person'], 82: ['person', 'text'], 83: ['person'], 84: ['person', 'text'], 85: ['person', 'text'], 86: ['person'], 87: ['person', 'text'], 88: ['person', 'text', 'politik'], 89: ['person', 'politik'], 90: ['person', 'politik'], 91: ['person', 'politik'], 92: ['person', 'politik', 'text'], 93: ['person', 'politik'], 94: ['person', 'politik'], 95: ['person', 'politik'], 96: ['person', 'politik'], 97: ['person', 'politik'], 98: ['person', 'politik'], 99: ['person', 'politik', 'text'], 100: ['person', 'politik', 'text'], 101: ['person', 'politik'], 102: ['person', 'politik', 'text'], 103: ['politik', 'person'], 104: ['politik', 'person'], 105: ['politik', 'person'], 106: ['meme', 'text', 'politik'], 107: ['politik', 'person', 'text', 'meme'], 108: ['meme', 'text'], 109: ['meme', 'text', 'politik'], 110: ['meme', 'text'], 111: ['meme', 'text'], 112: ['meme', 'text'], 113: ['meme', 'text'], 114: ['meme', 'text'], 115: ['meme', 'text'], 116: ['meme', 'text', 'politik'], 117: ['meme', 'text', 'politik'], 118: ['meme', 'text'], 119: ['meme', 'text'], 120: ['meme', 'text'], 121: ['meme', 'text'], 122: ['meme', 'text', 'politik'], 123: ['meme', 'text', 'politik'], 124: ['meme', 'text', 'politik'], 125: ['text', 'meme'], 126: ['text', 'politik'], 127: ['text', 'politik'], 128: ['text', 'ort'], 129: ['text', 'ort'], 130: ['text', 'ort'], 131: ['text', 'person', 'politik'], 132: ['text', 'person'], 133: ['text', 'person'], 134: ['text', 'politik', 'person'], 135: ['text', 'person', 'politik', 'meme'], 136: ['text', 'person', 'politik'], 137: ['text', 'person', 'politik'], 138: ['text', 'person', 'politik'], 139: ['text', 'person', 'politik'], 140: ['text', 'person', 'politik'], 141: ['text', 'meme', 'politik'], 142: ['text'], 143: ['text'], 144: ['text'], 145: ['text'], 146: ['text', 'politik'], 147: ['text', 'meme'], 148: ['text', 'meme'], 149: ['text', 'meme'], 150: ['text', 'meme'], 151: ['text', 'meme', 'politik'], 152: ['text', 'meme', 'politik'], 153: ['text', 'meme', 'politik']}
+    modified_df = data.copy()
+    modified_df['tag_combination'] = modified_df['image_id'].map(modified_labels_dict)
+    print("modified:",modified_df,"original:",data)
+    return modified_df
 def normalize_view_durations(data):
     # divide system time diff by the number of words as seen in words_per_image_dict on each image where the id is present in words_per_image_dict.
-    words_per_image_dict = {
-    124:24,
-    128:19,
-    106:12,
-    107:6,
-    108:27,
-    109:7,
-    110:12,
-    111:5,
-    112:9,
-    113:22,
-    114:3,
-    115:7,
-    116:17,
-    117:6,
-    118:23,
-    119:16,
-    120:26,
-    121:11,
-    122:7,
-    123:4,
-    124:14,
-    125:17,
-    127:5,
-    129:10,
-    130:25,
-    131:16,
-    132:12,
-    133:10,
-    134:24,
-    135:3,
-    136:25,
-    137:4,
-    138:23,
-    139:14,
-    140:22,
-    141:45,
-    142:14,
-    143:21,
-    144:64,
-    147:73,
-    148:19,
-    149:36,
-    150:34,
-    151:52,
-    152:50,
-    153:47
-    }
+    method = "division_after_min_time_substraction"
+
     normalized_df = data.copy()
     for image_id, group in normalized_df.groupby('image_id'):
         if image_id in words_per_image_dict:
             word_count = words_per_image_dict[image_id]
-            normalized_df.loc[group.index, 'system_time_diff_seconds'] /= word_count
+
+            if method == "division":
+                normalized_df.loc[group.index, 'system_time_diff_seconds'] /= word_count
+            elif method == "distance_to_median":
+                median = 8.669335
+                pass
+            elif method == "division_after_min_time_substraction":
+                median = 8.669335
+                normalized_df.loc[group.index, 'system_time_diff_seconds'] = (normalized_df.loc[group.index, 'system_time_diff_seconds'] - 5) / word_count
+                # set every nevative value to 0
+                normalized_df.loc[group.index, 'system_time_diff_seconds'] = normalized_df.loc[group.index, 'system_time_diff_seconds'].apply(lambda x: max(x, 0))
     return normalized_df
 
 def plot_category_matrix_2(data):
@@ -361,6 +433,52 @@ def plot_category_matrix_2(data):
     cbar.set_label("Tuple values")
 
     plt.show()
+
+def tobit_regression(data):
+    
+    import pandas as pd
+    import statsmodels.formula.api as smf
+    from statsmodels.miscmodels.ordinal_model import OrderedModel
+    from statsmodels.duration.hazard_regression import PHReg
+    import statsmodels.api as sm
+    from statsmodels.discrete.discrete_model import Tobit
+    
+    # Example data
+    df = data
+    # Lower and upper censoring points
+    low, high = 5.0, 15.0
+
+    # Tobit regression with censoring
+    model = Tobit(df["duration"], sm.add_constant(pd.get_dummies(df[["words", "category"]], drop_first=True)),
+                left=low, right=high)
+    res = model.fit()
+    print(res.summary())
+def censored_regression(data):
+    import pandas as pd
+    from lifelines import WeibullAFTFitter
+
+    # Example dataset: durations bounded between 5 and 15
+    df = pd.DataFrame({
+        "duration": [5.0, 7.3, 15.0, 6.1, 12.5, 15.0, 5.0, 9.8],
+        "words":    [10, 50, 100, 30, 80, 120, 5, 40],
+        "category": ["text", "people", "landscape", "people", "text", "landscape", "people", "text"]
+    })
+
+    # 1. Define censoring
+    # If duration = 5 or 15 → censored (lower or upper bound)
+    df["event_observed"] = ~df["duration"].isin([5.0, 15.0])  
+
+    # 2. Convert categorical variable into dummies
+    df = pd.get_dummies(df, columns=["category"], drop_first=True)
+
+    # 3. Fit Weibull AFT model
+    aft = WeibullAFTFitter()
+    aft.fit(df, duration_col="duration", event_col="event_observed")
+
+    # 4. Show results
+    aft.print_summary()
+
+
 #plot_view_duration_images()
 #plot_tag_groups(view_duration_df)
 #tag_analysis_results = display_tag_group_analysis(view_duration_df)
@@ -377,9 +495,11 @@ def plot_category_matrix_2(data):
 
 #sort the categories with text based on normalized view durations and plot descending
 
-plot_tag_groups(normalize_view_durations(view_duration_df),only_text=True)
-visualize_view_time_matrix(view_duration_df)
-plot_category_matrix_2(view_duration_df)
+#plot_tag_groups(view_duration_df)
+#plot_tag_groups(normalize_view_durations(view_duration_df),only_text=True)
+#visualize_view_time_matrix(view_duration_df)
+#plot_category_matrix_2(view_duration_df)
+
 # median:
 # person politik textimg: 0.47
 # ort textimg: 0.55
@@ -390,3 +510,25 @@ plot_category_matrix_2(view_duration_df)
 # politik_text: 10.400
 
 # mean:
+
+#print("img text dict",create_textimg_df(view_duration_df))
+
+#print("="*30+"\nNEUE LABELS\n\n"+"="*30)
+#print(display_tag_group_analysis(normalize_view_durations(view_duration_df),only_text=False,new_labels=True))
+#print("="*30+"\nALTE LABELS\n\n"+"="*30)
+#print(display_tag_group_analysis(normalize_view_durations(view_duration_df),only_text=False,new_labels=False))
+
+#plot_tag_groups(view_duration_df,new_labels=False)
+#plot_tag_groups(normalize_view_durations(view_duration_df),only_text=True,new_labels=True)
+#plot_tag_groups(normalize_view_durations(view_duration_df),only_text=True,new_labels=False)
+
+#analyze_tag_groups(normalize_view_durations(view_duration_df),only_text=True,new_labels=True)
+#analyze_tag_groups(normalize_view_durations(view_duration_df),only_text=True,new_labels=False)
+
+#display_tag_group_analysis(normalize_view_durations(view_duration_df),only_text=True,new_labels=True)
+#visualize_view_time_matrix(view_duration_df,new_labels=False)
+#visualize_view_time_matrix(view_duration_df,new_labels=False)
+#plot_category_matrix_2(view_duration_df)
+
+#tobit_regression(view_duration_df)
+print(censored_regression(view_duration_df))
