@@ -1,78 +1,8 @@
-import re
-
-# Raw data string (copy your list here)
-data = """
-0-10 : meme
-11-13 : ort text
-id 14 : ort
-id 15 : ort (text)
-id 16-17 : ort text 
-id 18-32 : ort
-id 33 : person (text)
-id 34 : person (text)
-id 35-73 : person
-id 74 : person (text)
-id 75 : person
-id 76 : person (text)
-id 77-81 : person
-id 82 : person (text)
-id 83 : person
-id 84-85 : person (text)
-id 86 : person
-id 87 : person (text)
-id 88 : person text politik
-id 89-91 : person politik
-id 92 : person politik (text)
-id 93-98 : person politik
-id 99-100 : person politik text
-id 101 : person politik
-id 102 : person politik (text)
-id 103-105 : politik person 
-id 106 : meme text (politik)
-id 107 : politik person text meme
-id 108 : meme text
-id 109 : meme text politik
-id 110-115 : meme text
-id 116-117 : meme text politik
-id 118-121 : meme text
-id 122-124 : meme text politik
-id 125 : text meme
-id 126-127 : text politik
-id 128-130 : text (ort)
-id 131 : text person (politik)
-id 132-133 : text person 
-id 134 : text politik (person)
-id 135 : text person politik (meme)
-id 136-140 : text person politik
-id 141 : text meme politik
-id 142-145 : text
-id 146 : text politik
-id 147-150 : text meme
-id 151-153 : text meme (politik)
-"""
-
-result = {}
-
-for line in data.strip().splitlines():
-    # Extract IDs and tags
-    ids_part, tags_part = line.split(":")
-    ids_part = ids_part.replace("id", "").strip()
-    tags_part = tags_part.strip()
-
-    # Expand ranges or single ids
-    if "-" in ids_part:
-        start, end = map(int, ids_part.split("-"))
-        ids = range(start, end + 1)
-    else:
-        ids = [int(ids_part)]
-
-    # Normalize tags: remove parentheses but keep content
-    tags_clean = re.sub(r"[()]", "", tags_part)
-    tags = tags_clean.split()
-
-    # Assign tags to each id
-    for i in ids:
-        result[i] = tags
-
-# Example output
-print(result)
+liste = ["a","b","c"]
+for i in liste:
+    if i == "a":
+        liste.remove(i)
+        liste.append("d")
+    elif i == "b":
+        liste.remove(i)
+print(liste)

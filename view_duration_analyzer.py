@@ -4,6 +4,10 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import pandas as pd
+from lifelines import WeibullAFTFitter
+from lifelines import LogNormalAFTFitter
+
 view_duration_df = pd.read_csv('view_durations.csv')
 words_per_image_dict = {
     106:12,
@@ -64,22 +68,34 @@ print("Median Duration: ",view_duration_df["system_time_diff_seconds"].median())
 #image_tag_dictionary should contain a list of tags for every image
 #group view_durations_df by image id and dissect image_nam
 
-def create_textimg_df(data):
+def create_textimg_df(data, drop_non_text=True):
     #create a dataframe with all images that appear in words_per_image_dict, their number of words, their median system time diff as "duration" and their tagstring as "category"
     textimg_data = []
     for image_id, group in data.groupby('image_id'):
+
         if image_id in words_per_image_dict:
             word_count = words_per_image_dict[image_id]
-            median_duration = group['system_time_diff_seconds'].median()
-            #get the tagstring from any of the image names in the group
-            tagstring = group.iloc[0]['image_name'].split('_')[1:-1]
-            tagstring = '_'.join(tagstring)
-            textimg_data.append({
-                'image_id': image_id,
-                'words': word_count,
-                'duration': median_duration,
-                'category': tagstring
-            })
+        elif not drop_non_text:
+            word_count = 0
+        elif drop_non_text:
+            continue
+        median_duration = group['system_time_diff_seconds'].median()
+        #get the tagstring from any of the image names in the group
+        tagstring = group.iloc[0]['image_name'].split('_')[1:-1]
+        for tag in tagstring.copy():
+            if tag == "ncc":
+                tagstring.remove("ncc")
+            elif tag =="textigm" or tag == "textimg":
+                tagstring.remove(tag)
+                tagstring.append("text")
+        print("tagstring: ",tagstring, "image id: ",image_id)
+        tagstring = '_'.join(tagstring)
+        textimg_data.append({
+            'image_id': image_id,
+            'words': word_count,
+            'duration': median_duration,
+            'category': tagstring
+        })
 
     return pd.DataFrame(textimg_data)
 
@@ -306,10 +322,10 @@ def visualize_view_time_matrix(data,new_labels=False):
     view_time_matrix = create_view_time_matrix(data,new_labels=new_labels)
     plt.figure(figsize=(10, 6))
     mask = view_time_matrix == 0
-    sns.heatmap(view_time_matrix, mask = mask ,annot=True, cmap="YlGnBu", cbar_kws={'label': 'Median Viewing Time (seconds)'})
-    plt.title("Viewing Time Matrix")
-    plt.xlabel("Text Presence")
-    plt.ylabel("Semantic Categories")
+    sns.heatmap(view_time_matrix, mask = mask ,annot=True, cmap="YlGnBu", cbar_kws={'label': 'Median der Betrachtungsdauer in Sekunden'})
+    plt.title("Matrix Betrachtungsdauer")
+    plt.xlabel("Präsez von Text")
+    plt.ylabel("Kategorien")
     plt.show()
 def create_category_matrix(data,only_text=False,new_labels=False):
     semantic_categories = ["meme", "person", "politik", "ort"]
@@ -317,7 +333,7 @@ def create_category_matrix(data,only_text=False,new_labels=False):
     #NxN matrix with each semantic category on both axes. 
     # Each cell shows the average system time diff for the combined category n,m without text
     category_matrix = pd.DataFrame(0, index=semantic_categories, columns=semantic_categories, dtype=float)
-    category_matrix = category_matrix.map(lambda x: (0,0))
+        
     print(category_matrix)
     for idx, row in tag_analysis_df.iterrows():
         for category in semantic_categories:
@@ -347,7 +363,7 @@ def plot_category_matrix(data):
     plt.ylabel("Semantic Categories")
     plt.show()
 def adjust_categories(data):
-
+    modified_labels_dict = {}
     modified_labels_dict = {0: ['meme'], 1: ['meme'], 2: ['meme'], 3: ['meme'], 4: ['meme'], 5: ['meme'], 6: ['meme'], 7: ['meme'], 8: ['meme'], 9: ['meme'], 10: ['meme'], 11: ['ort', 'text'], 12: ['ort', 'text'], 13: ['ort', 'text'], 14: ['ort'], 15: ['ort', 'text'], 16: ['ort', 'text'], 17: ['ort', 'text'], 18: ['ort'], 19: ['ort'], 20: ['ort'], 21: ['ort'], 22: ['ort'], 23: ['ort'], 24: ['ort'], 25: ['ort'], 26: ['ort'], 27: ['ort'], 28: ['ort'], 29: ['ort'], 30: ['ort'], 31: ['ort'], 32: ['ort'], 33: ['person', 'text'], 34: ['person', 'text'], 35: ['person'], 36: ['person'], 37: ['person'], 38: ['person'], 39: ['person'], 40: ['person'], 41: ['person'], 42: ['person'], 43: ['person'], 44: ['person'], 45: ['person'], 46: ['person'], 47: ['person'], 48: ['person'], 49: ['person'], 50: ['person'], 51: ['person'], 52: ['person'], 53: ['person'], 54: ['person'], 55: ['person'], 56: ['person'], 57: ['person'], 58: ['person'], 59: ['person'], 60: ['person'], 61: ['person'], 62: ['person'], 63: ['person'], 64: ['person'], 65: ['person'], 66: ['person'], 67: ['person'], 68: ['person'], 69: ['person'], 70: ['person'], 71: ['person'], 72: ['person'], 73: ['person'], 74: ['person', 'text'], 75: ['person'], 76: ['person', 'text'], 77: ['person'], 78: ['person'], 79: ['person'], 80: ['person'], 81: ['person'], 82: ['person', 'text'], 83: ['person'], 84: ['person', 'text'], 85: ['person', 'text'], 86: ['person'], 87: ['person', 'text'], 88: ['person', 'text', 'politik'], 89: ['person', 'politik'], 90: ['person', 'politik'], 91: ['person', 'politik'], 92: ['person', 'politik', 'text'], 93: ['person', 'politik'], 94: ['person', 'politik'], 95: ['person', 'politik'], 96: ['person', 'politik'], 97: ['person', 'politik'], 98: ['person', 'politik'], 99: ['person', 'politik', 'text'], 100: ['person', 'politik', 'text'], 101: ['person', 'politik'], 102: ['person', 'politik', 'text'], 103: ['politik', 'person'], 104: ['politik', 'person'], 105: ['politik', 'person'], 106: ['meme', 'text', 'politik'], 107: ['politik', 'person', 'text', 'meme'], 108: ['meme', 'text'], 109: ['meme', 'text', 'politik'], 110: ['meme', 'text'], 111: ['meme', 'text'], 112: ['meme', 'text'], 113: ['meme', 'text'], 114: ['meme', 'text'], 115: ['meme', 'text'], 116: ['meme', 'text', 'politik'], 117: ['meme', 'text', 'politik'], 118: ['meme', 'text'], 119: ['meme', 'text'], 120: ['meme', 'text'], 121: ['meme', 'text'], 122: ['meme', 'text', 'politik'], 123: ['meme', 'text', 'politik'], 124: ['meme', 'text', 'politik'], 125: ['text', 'meme'], 126: ['text', 'politik'], 127: ['text', 'politik'], 128: ['text', 'ort'], 129: ['text', 'ort'], 130: ['text', 'ort'], 131: ['text', 'person', 'politik'], 132: ['text', 'person'], 133: ['text', 'person'], 134: ['text', 'politik', 'person'], 135: ['text', 'person', 'politik', 'meme'], 136: ['text', 'person', 'politik'], 137: ['text', 'person', 'politik'], 138: ['text', 'person', 'politik'], 139: ['text', 'person', 'politik'], 140: ['text', 'person', 'politik'], 141: ['text', 'meme', 'politik'], 142: ['text'], 143: ['text'], 144: ['text'], 145: ['text'], 146: ['text', 'politik'], 147: ['text', 'meme'], 148: ['text', 'meme'], 149: ['text', 'meme'], 150: ['text', 'meme'], 151: ['text', 'meme', 'politik'], 152: ['text', 'meme', 'politik'], 153: ['text', 'meme', 'politik']}
     modified_df = data.copy()
     modified_df['tag_combination'] = modified_df['image_id'].map(modified_labels_dict)
@@ -384,7 +400,9 @@ def plot_category_matrix_2(data):
     
     df = create_category_matrix(data)
     # Normalize for colormap
+    print(df.values)
     all_vals = np.array([v for row in df.values for v in row])
+    print(all_vals)
     vals1 = all_vals[:,0]
     vals2 = all_vals[:,1]
     vmin = min(vals1.min(), vals2.min())
@@ -453,16 +471,43 @@ def tobit_regression(data):
                 left=low, right=high)
     res = model.fit()
     print(res.summary())
+
+def fit_aft(df, duration_col="duration", words_col="words", category_col="category"):
+    """
+    Fit a Weibull AFT model where each subcategory from a compound category string
+    is treated as its own predictor (multi-hot encoding).
+    
+    Args:
+        df: DataFrame with duration, words, category.
+        duration_col: Column with viewing times.
+        words_col: Column with word counts.
+        category_col: Column with compound category strings (e.g. 'person_politik_text').
+    """
+    data = df.copy()
+
+    # Define censoring: if exactly at lower/upper bound, treat as censored
+    data["event_observed"] = ~data[duration_col].isin([5.0, 15.0])
+
+    # Split categories into multiple binary indicators
+    # e.g. "person_politik_text" → {"person":1, "politik":1, "text":1}
+    dummies = data[category_col].str.get_dummies(sep="_")
+
+    # Combine predictors: words + dummies
+    X = pd.concat([data[[duration_col, words_col, "event_observed"]], dummies], axis=1)
+
+    # Fit Weibull AFT
+    aft = WeibullAFTFitter()
+    aft.fit(X, duration_col=duration_col, event_col="event_observed")
+    
+    aft.print_summary()
+    return aft, X
+
 def censored_regression(data):
     import pandas as pd
     from lifelines import WeibullAFTFitter
-
+    
     # Example dataset: durations bounded between 5 and 15
-    df = pd.DataFrame({
-        "duration": [5.0, 7.3, 15.0, 6.1, 12.5, 15.0, 5.0, 9.8],
-        "words":    [10, 50, 100, 30, 80, 120, 5, 40],
-        "category": ["text", "people", "landscape", "people", "text", "landscape", "people", "text"]
-    })
+    df = data
 
     # 1. Define censoring
     # If duration = 5 or 15 → censored (lower or upper bound)
@@ -477,7 +522,7 @@ def censored_regression(data):
 
     # 4. Show results
     aft.print_summary()
-
+    aft.plot()
 
 #plot_view_duration_images()
 #plot_tag_groups(view_duration_df)
@@ -531,4 +576,9 @@ def censored_regression(data):
 #plot_category_matrix_2(view_duration_df)
 
 #tobit_regression(view_duration_df)
-print(censored_regression(view_duration_df))
+#censored_regression(create_textimg_df(adjust_categories(view_duration_df)))
+#print(analyze_tag_groups(view_duration_df, new_labels=False))
+#print(create_textimg_df(view_duration_df))
+#fit_aft(create_textimg_df(view_duration_df, drop_non_text=False))
+#display_tag_group_analysis(view_duration_df,only_text=False,new_labels=False)
+#plot_category_matrix_2(view_duration_df)
